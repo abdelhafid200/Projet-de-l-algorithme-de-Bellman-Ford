@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graph Matrix</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+
+    <style>
+        table {
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid black;
+        }
+        .custom-matrix-table {
+            width: 80%;
+        }
+        #graphCanvas, #shortestPathsGraphCanvas{
+            max-width: 90%;
+        }
+        #error-message{
+            width: 80%;
+            position: relative;
+            left: 29vh;
+
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h2 class="font-weight-bold mb-4">Assignation des Poids aux Arêtes</h2>
+    </div>  
+
+    <div class="d-flex ml-4">
+        
+        <div class="table-responsive ml-2 custom-matrix-table">
+            <table id="matrixTable" class="table table-bordered table-striped">
+                <!-- Table cells will be dynamically added here using JavaScript -->
+            </table>
+        </div>
+        <div class="ml-3">
+            <button class="btn btn-primary mb-1" onclick="addNode()">Add Node</button>
+            <br>
+            <button class="btn btn-danger" onclick="removeNode()">Remove Node</button>
+        </div>
+
+    </div>
+
+    <div class="text-center mt-2 mb-2">
+        <button class="btn btn-success" onclick="validateMatrix()">Validate Matrix</button>
+        <button class="btn btn-warning" onclick="AppliquerBellman()">Appliquer le Bellman</button>
+    </div>
+    
+    <!-- Ajoutez cette balise juste après le bouton "Appliquer le Bellman" -->
+    <p id="error-message" class="alert alert-danger" style="display:none;"></p>
+
+
+
+    <div class="d-flex">
+        <div>
+            <div class="container mt-4">
+                <h1 class="mt-4 font-weight-bold mb-4">Le graphe origine</h1>
+            </div>
+            <canvas id="graphCanvas" class="border" width="800" height="800"></canvas>
+        </div>
+        <div>
+            <div class="container mt-4">
+                <h1 class="mt-4 font-weight-bold mb-4">Le graphe apres bellman </h1>
+            </div>
+            <canvas id="shortestPathsGraphCanvas" class="border" width="800" height="800"></canvas>
+        </div>
+    </div>
+    <div id="incidenceMatrixContainer" class="mt-4 p-3 border"></div>
+    
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- Bootstrap JS and Popper.js CDN (required for Bootstrap) -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.0.8/dist/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+
+        function createMatrix(rows, cols) {
+            const matrixTable = document.getElementById('matrixTable');
+            for (let i = 0; i < rows; i++) {
+                const row = matrixTable.insertRow(i);
+                for (let j = 0; j < cols; j++) {
+                    const cell = row.insertCell(j);
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = '∞';
+                    input.min = 0;
+                    cell.appendChild(input);
+                }
+            }
+        }
+        // Fonction pour créer une matrice vide de 3x3
+        function createEmptyMatrix() {
+            createMatrix(3, 3);
+        }
+
+        function addNode() {
+            const matrixTable = document.getElementById('matrixTable');
+            const numRows = matrixTable.rows.length;
+            const numCols = matrixTable.rows[0].cells.length;
+
+            // Add a new row
+            const newRow = matrixTable.insertRow(numRows);
+            for (let j = 0; j < numCols + 1; j++) {
+                const cell = newRow.insertCell(j);
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = '∞';
+                input.min = 0;
+                cell.appendChild(input);
+            }
+
+            // Add a new column
+            for (let i = 0; i < numRows; i++) {
+                const cell = matrixTable.rows[i].insertCell(numCols);
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = '∞';
+                input.min = 0;
+                cell.appendChild(input);
+            }
+        }
+
+        function removeNode() {
+            const matrixTable = document.getElementById('matrixTable');
+            const numRows = matrixTable.rows.length;
+            const numCols = matrixTable.rows[0].cells.length;
+
+            // Ensure there's at least one cell remaining
+            if (numRows > 1 && numCols > 1) {
+                // Remove the last row
+                matrixTable.deleteRow(numRows - 1);
+
+                // Remove the last column
+                for (let i = 0; i < numRows; i++) {
+                    matrixTable.rows[i].deleteCell(numCols - 1);
+                }
+            }
+        }
+        // Fonction pour valider la matrice et afficher le graphe
+        function validateMatrix() {
+        const matrix = getMatrixValues();
+        console.log('Sending matrix to Flask:', matrix)
+        sendMatrixToFlask(matrix);
+        // runBellmanFord(matrix);
+
+    }
+
+    function AppliquerBellman() {
+        const startNode = prompt('Entrez le nœud de départ :');
+        const matrix = getMatrixValues();
+        const requestData = {
+            start_node: startNode,
+            matrix: matrix,
+        };
+    
+        fetch('http://127.0.0.1:5000/AppliquerBellman', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ requestData: requestData }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("Réponse de l'API:", data);
+    
+            // Vérifiez si la réponse contient la propriété 'error'
+            if (data.error) {
+                const errorMessageDiv = document.getElementById('error-message');
+                errorMessageDiv.innerText = data.error;
+                errorMessageDiv.style.display = 'block';
+            } else {
+                const errorMessageDiv = document.getElementById('error-message');
+                errorMessageDiv.style.display = 'none';
+                displayGraph2(data);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }
+    
+    
+    
+    
+
+
+function getMatrixValues() {
+    const matrix = [];
+    const matrixTable = document.getElementById('matrixTable');
+    for (let i = 0; i < matrixTable.rows.length; i++) {
+        const row = matrixTable.rows[i];
+        const rowData = [];
+        for (let j = 0; j < row.cells.length; j++) {
+            const cell = row.cells[j];
+            let inputValue = cell.querySelector('input').value;
+            // Convertir '∞' en 0
+            inputValue = (inputValue === '∞') ? 0 : parseInt(inputValue, 10);
+            rowData.push(inputValue);
+        }
+        matrix.push(rowData);
+    }
+    return matrix;
+}
+
+
+
+    function sendMatrixToFlask(matrix) {
+        fetch('http://127.0.0.1:5000/generate_graph', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ matrix: matrix }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("ddddd", data);
+            displayGraph(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }
+
+
+
+
+
+        // Fonction pour afficher le graphe à partir de la matrice
+        function displayGraph(data) {
+            const canvas = document.getElementById('graphCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Effacer le canvas avant de dessiner le nouveau graphe
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Utilisez les données reçues pour dessiner le graphe
+            const imageData = data.image_data;
+
+            // Créer une image à partir des données base64
+            const img = new Image();
+            img.src = 'data:image/png;base64,' + imageData;
+
+            // Dessiner l'image sur le canvas
+            img.onload = function () {
+                ctx.drawImage(img, 0, 0);
+
+                // Ajouter les poids des arêtes après le chargement de l'image
+                const orientations = data.orientations;
+                if (orientations) {
+                    ctx.font = "12px Arial";
+                    ctx.fillStyle = "black";
+                    orientations.forEach(orientation => {
+                        const [start, end] = orientation;
+                        const middleX = (start[0] + end[0]) / 2;
+                        const middleY = (start[1] + end[1]) / 2;
+                        ctx.fillText("Weight", middleX, middleY);  // Remplacez "Weight" par ce que vous voulez afficher
+                    });
+                }
+            };
+            }
+
+
+
+
+
+    function displayGraph2(data) {
+        const canvas = document.getElementById('shortestPathsGraphCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Effacer le canvas avant de dessiner le nouveau graphe
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Utilisez les données reçues pour dessiner le graphe
+        const imageData = data.image_data;
+
+        // Créer une image à partir des données base64
+        const img = new Image();
+        img.src = 'data:image/png;base64,' + imageData;
+
+        // Dessiner l'image sur le canvas
+        img.onload = function () {
+            ctx.drawImage(img, 0, 0);
+
+            // Ajouter les poids des arêtes après le chargement de l'image
+            const orientations = data.orientations;
+            if (orientations) {
+                ctx.font = "12px Arial";
+                ctx.fillStyle = "black";
+                orientations.forEach(orientation => {
+                    const [start, end] = orientation;
+                    const middleX = (start[0] + end[0]) / 2;
+                    const middleY = (start[1] + end[1]) / 2;
+                    ctx.fillText("Weight", middleX, middleY);  // Remplacez "Weight" par ce que vous voulez afficher
+                });
+            }
+        };
+}
+
+        // Appeler la fonction pour créer la matrice vide au chargement de la page
+        window.onload = createEmptyMatrix;
+    </script>
+</body>
+</html>
